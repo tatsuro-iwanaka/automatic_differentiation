@@ -14,7 +14,7 @@ This library provides a dual number (`dual<T>`) implementation and a fully AD-co
 
 ### Basic Automatic Differentiation
 
-To compute the derivative of a function $f(x) = x^2 \sin(x)$ at $x = 2.0$ for example:
+To compute the derivative of a function $f(x) = x^2 \sin(x)$ at $x = 5.0$ for example:
 
 ```cpp
 int main(void)
