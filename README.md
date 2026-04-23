@@ -17,19 +17,17 @@ This library provides a dual number (`dual<T>`) implementation and a fully AD-co
 To compute the derivative of a function $f(x) = x^2 \sin(x)$ at $x = 2.0$ for example:
 
 ```cpp
-#include <iostream>
-#include "autodiff.hpp"
-
-int main()
+int main(void)
 {
-  // Initialize x with value 2.0 and derivative seed 1.0 (dx/dx = 1)
-  dual<double> x(2.0, 1.0);
-    
-  // Perform operations
-  dual<double> y = x * x * sin(x);
-    
-  std::cout << "f(x)  = " << y.val << std::endl;
-  std::cout << "f'(x) = " << y.der << std::endl; // Analytically exact derivative
-    
-  return 0;
+	// Initialize x with value 5.0 and derivative seed 1.0 (dx/dx = 1)
+	autodiff::dual<double> x(5.0, 1.0);
+		
+	// Perform operations
+	autodiff::dual<double> y = x * x * sin(x);
+		
+	std::cout << "f(x)  = " << y.val << std::endl;
+	std::cout << "f'(x) = " << y.der << std::endl; // Analytically exact derivative
+	std::cout << "exact f'(x) = " << 2.0 * 5.0 * std::sin(5.0) + 5.0 * 5.0 * std::cos(5.0) << std::endl;
+		
+	return 0;
 }
