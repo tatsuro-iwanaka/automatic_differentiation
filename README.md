@@ -27,7 +27,7 @@ int main(void)
 	autodiff::dual<double> x(5.0, 1.0);
 		
 	// Perform operations
-	autodiff::dual<double> y = x * x * sin(x);
+	autodiff::dual<double> y = x * x * autodiff::sin(x);
 		
 	std::cout << "f(x)  = " << y.val << std::endl;
 	std::cout << "f'(x) = " << y.der << std::endl; // Analytically exact derivative
