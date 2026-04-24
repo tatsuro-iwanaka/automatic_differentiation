@@ -17,6 +17,10 @@ This library provides a dual number (`dual<T>`) implementation and a fully AD-co
 To compute the derivative of a function $f(x) = x^2 \sin(x)$ at $x = 5.0$ for example:
 
 ```cpp
+#include <iostream>
+#include <cmath>
+#include "autodiff.hpp"
+
 int main(void)
 {
 	// Initialize x with value 5.0 and derivative seed 1.0 (dx/dx = 1)
