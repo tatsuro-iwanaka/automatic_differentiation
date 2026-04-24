@@ -61,41 +61,48 @@ template <typename T> inline dual<T> dual<T>::operator/(const dual<T>& rhs) cons
 
 template <typename T> inline dual<T> sin(const dual<T>& x)
 {
-	return dual<T>(std::sin(x.val), std::cos(x.val) * x.der);
+	using std::sin; using std::cos;
+	return dual<T>(sin(x.val), cos(x.val) * x.der);
 }
 
 template <typename T> inline dual<T> cos(const dual<T>& x)
 {
-	return dual<T>(std::cos(x.val), -std::sin(x.val) * x.der);
+	using std::sin; using std::cos;
+	return dual<T>(cos(x.val), -sin(x.val) * x.der);
 }
 
 template <typename T> inline dual<T> tan(const dual<T>& x)
 {
-	return dual<T>(std::tan(x.val), x.der / std::cos(x.val) / std::cos(x.val));
+	using std::tan; using std::cos;
+	return dual<T>(tan(x.val), x.der / cos(x.val) / cos(x.val));
 }
 
 template <typename T> inline dual<T> asin(const dual<T>& x)
 {
 	// d/dx(asin(x)) = 1 / sqrt(1 - x^2)
-	return dual<T>(std::asin(x.val), x.der / std::sqrt(T(1.0) - x.val * x.val));
+	using std::asin; using std::sqrt;
+	return dual<T>(asin(x.val), x.der / sqrt(T(1.0) - x.val * x.val));
 }
 
 template <typename T> inline dual<T> acos(const dual<T>& x)
 {
 	// d/dx(acos(x)) = -1 / sqrt(1 - x^2)
-	return dual<T>(std::acos(x.val), -x.der / std::sqrt(T(1.0) - x.val * x.val));
+	using std::asin; using std::sqrt;
+	return dual<T>(acos(x.val), -x.der / sqrt(T(1.0) - x.val * x.val));
 }
 
 template <typename T> inline dual<T> atan(const dual<T>& x)
 {
 	// d/dx(atan(x)) = 1 / (1 + x^2)
-	return dual<T>(std::atan(x.val), x.der / (T(1.0) + x.val * x.val));
+	using std::atan;
+	return dual<T>(atan(x.val), x.der / (T(1.0) + x.val * x.val));
 }
 
 template <typename T> inline dual<T> atan2(const dual<T>& y, const dual<T>& x)
 {
 	// 実部の計算
-	T val = std::atan2(y.val, x.val);
+	using std::atan2;
+	T val = atan2(y.val, x.val);
 	
 	// 分母 (x^2 + y^2) の計算
 	T denom = x.val * x.val + y.val * y.val;
@@ -109,57 +116,62 @@ template <typename T> inline dual<T> atan2(const dual<T>& y, const dual<T>& x)
 
 template <typename T> inline dual<T> sinh(const dual<T>& x)
 {
-	return dual<T>(std::sinh(x.val), std::cosh(x.val) * x.der);
+	using std::sinh; using std::cosh;
+	return dual<T>(sinh(x.val), cosh(x.val) * x.der);
 }
 
 template <typename T> inline dual<T> cosh(const dual<T>& x)
 {
-	return dual<T>(std::cosh(x.val), std::sinh(x.val) * x.der);
+	using std::sinh; using std::cosh;
+	return dual<T>(cosh(x.val), sinh(x.val) * x.der);
 }
 
 template <typename T> inline dual<T> tanh(const dual<T>& x)
 {
-	T th = std::tanh(x.val);
+	using std::tanh;
+	T th = tanh(x.val);
 	return dual<T>(th, x.der * (T(1.0) - th * th));
 }
 
 template <typename T> inline dual<T> exp(const dual<T>& x)
 {
-	T e = std::exp(x.val);
+	using std::exp;
+	T e = exp(x.val);
 	return dual<T>(e, e * x.der);
 }
 
 template <typename T> inline dual<T> log(const dual<T>& x)
 {
-	return dual<T>(std::log(x.val), x.der / x.val);
-}
-
-template <typename T> inline dual<T> floor(const dual<T>& x)
-{
-	return dual<T>(std::floor(x.val), 0.0);
+	using std::log;
+	return dual<T>(log(x.val), x.der / x.val);
 }
 
 template <typename T> inline dual<T> cbrt(const dual<T>& x)
 {
-	return dual<T>(std::cbrt(x.val), x.der / (3.0 * std::pow(x.val, 2.0 / 3.0)));
+	using std::cbrt;
+	T res_val = cbrt(x.val);
+	return dual<T>(res_val, x.der / (T(3.0) * res_val * res_val));
 }
 
 template <typename T> inline dual<T> abs(const dual<T>& x)
 {
-	T sign = (x.val > 0.0) ? 1.0 : ((x.val < 0.0) ? -1.0 : 0.0);
-	return dual<T>(std::abs(x.val), x.der * sign);
+	using std::abs;
+	T sign = (x.val > 0.0) ? T(1.0) : ((x.val < 0.0) ? T(-1.0) : T(0.0));
+	return dual<T>(abs(x.val), x.der * sign);
 }
 
 template <typename T> inline dual<T> sqrt(const dual<T>& x)
 {
-	return dual<T>(std::sqrt(x.val), x.der / (2.0 * std::sqrt(x.val)));
+	using std::sqrt;
+	return dual<T>(sqrt(x.val), x.der / (T(2.0) * sqrt(x.val)));
 }
 
 template <typename T> inline dual<T> pow(const dual<T>& base, const dual<T>& exp)
 {
+	using std::pow; using std::log;
 	// dual^dual : d/dx(u^v) = v*u^(v-1)*u' + u^v*ln(u)*v'
-	T val = std::pow(base.val, exp.val);
-	T der = exp.val * std::pow(base.val, exp.val - T(1.0)) * base.der + val * std::log(base.val) * exp.der;
+	T val = pow(base.val, exp.val);
+	T der = exp.val * pow(base.val, exp.val - T(1.0)) * base.der + val * log(base.val) * exp.der;
 	return dual<T>(val, der);
 }
 
@@ -177,15 +189,17 @@ template <typename T> inline dual<T> pow(const T& base, const dual<T>& exp)
 
 template <typename T> inline dual<T> erf(const dual<T>& x)
 {
-	T val = std::erf(x.val);
-	T der = x.der * T(2.0) / std::sqrt(T(std::numbers::pi)) * std::exp(-x.val * x.val);
+	using std::sqrt; using std::exp; using std::erf;
+	T val = erf(x.val);
+	T der = x.der * T(2.0) / sqrt(T(std::numbers::pi)) * exp(-x.val * x.val);
 	return dual<T>(val, der);
 }
 
 template <typename T> inline dual<T> erfc(const dual<T>& x)
 {
-	T val = std::erfc(x.val);
-	T der = -x.der * T(2.0) / std::sqrt(T(std::numbers::pi)) * std::exp(-x.val * x.val);
+	using std::sqrt; using std::exp; using std::erfc;
+	T val = erfc(x.val);
+	T der = -x.der * T(2.0) / sqrt(T(std::numbers::pi)) * exp(-x.val * x.val);
 	return dual<T>(val, der);
 }
 
@@ -310,16 +324,6 @@ template <typename T> inline dual<T> fmin(const dual<T>& x, const T& y)
 	return (x.val < y) ? x : dual<T>(y, 0.0);
 }
 
-template <typename T> inline dual<T> ceil(const dual<T>& x)
-{
-	return dual<T>(std::ceil(x.val), T(0.0));
-}
-
-template <typename T> inline dual<T> round(const dual<T>& x)
-{
-	return dual<T>(std::round(x.val), T(0.0));
-}
-
 template <typename T> inline bool isnan(const dual<T>& x)
 {
 	using std::isnan;
@@ -332,6 +336,56 @@ template <typename T> inline bool isinf(const dual<T>& x)
 	return isinf(x.val);
 }
 
+template <typename T> inline dual<T> copysign(const dual<T>& x, const dual<T>& y)
+{
+	using std::signbit;
+	using std::copysign;
+
+	T val = copysign(x.val, y.val);
+	bool same_sign = (signbit(x.val) == signbit(y.val));
+
+	return dual<T>(val, same_sign ? x.der : -x.der);
+}
+
+template <typename T> inline dual<T> copysign(const dual<T>& x, const T& y)
+{
+	using std::signbit;
+	using std::copysign;
+	T val = copysign(x.val, y);
+	bool same_sign = (signbit(x.val) == signbit(y));
+	return dual<T>(val, same_sign ? x.der : -x.der);
+}
+
+template <typename T> inline dual<T> copysign(const T& x, const dual<T>& y)
+{
+	using std::copysign;
+	return dual<T>(copysign(x, y.val), T(0.0));
+}
+
+template <typename T> inline dual<T> floor(const dual<T>& x)
+{
+	using std::floor;
+	return dual<T>(floor(x.val), T(0.0));
+}
+
+template <typename T> inline dual<T> ceil(const dual<T>& x)
+{
+	using std::ceil;
+	return dual<T>(ceil(x.val), T(0.0));
+}
+
+template <typename T> inline dual<T> trunc(const dual<T>& x)
+{
+	using std::trunc;
+	return dual<T>(trunc(x.val), T(0.0));
+}
+
+template <typename T> inline dual<T> round(const dual<T>& x)
+{
+	using std::round;
+	return dual<T>(round(x.val), T(0.0));
+}
+
 // 複素数構造体
 template <typename T> struct complex
 {
@@ -339,6 +393,11 @@ template <typename T> struct complex
 	T im;
 
 	complex(T r = T(0.0), T i = T(0.0)) : re(r), im(i)
+	{
+		;
+	}
+
+	template <typename U> complex(U val) : re(T(val)), im(T(0.0))
 	{
 		;
 	}
@@ -481,7 +540,7 @@ template <typename T> inline complex<T> conj(const complex<T>& c)
 
 template <typename T> inline T arg(const complex<T>& c)
 {
-	using std::atan2; // std::atan2 を候補に入れる
+	using std::atan2;
 	auto result = atan2(c.im, c.re);
 	return result;
 }
@@ -489,14 +548,12 @@ template <typename T> inline T arg(const complex<T>& c)
 template <typename T> complex<T> sin(const complex<T>& z)
 {
 	using std::sin; using std::cos; using std::sinh; using std::cosh;
-
 	return complex<T>(sin(z.re) * cosh(z.im), cos(z.re) * sinh(z.im));
 }
 
 template <typename T> complex<T> cos(const complex<T>& z)
 {
 	using std::sin; using std::cos; using std::sinh; using std::cosh;
-
 	return complex<T>(cos(z.re) * cosh(z.im), -sin(z.re) * sinh(z.im));
 }
 
@@ -518,14 +575,12 @@ template <typename T> complex<T> tan(const complex<T>& z)
 template <typename T> inline complex<T> sinh(const complex<T>& z)
 {
 	using std::sinh; using std::cosh; using std::sin; using std::cos;
-
 	return complex<T>(sinh(z.re) * cos(z.im), cosh(z.re) * sin(z.im));
 }
 
 template <typename T> inline complex<T> cosh(const complex<T>& z)
 {
 	using std::sinh; using std::cosh; using std::sin; using std::cos;
-
 	return complex<T>(cosh(z.re) * cos(z.im), sinh(z.re) * sin(z.im));
 }
 
@@ -537,7 +592,6 @@ template <typename T> inline complex<T> tanh(const complex<T>& z)
 template <typename T> complex<T> exp(const complex<T>& z)
 {
 	using std::exp; using std::sin; using std::cos;
-
 	T ex = exp(z.re);
 	return complex<T>(ex * cos(z.im), ex * sin(z.im));
 }
@@ -616,6 +670,7 @@ template <typename T> inline complex<T>& complex<T>::operator/=(const T& rhs)
 
 template <typename T> inline bool isnan(const complex<T>& c)
 {
+	using std::isnan;
 	return isnan(c.re) || isnan(c.im);
 }
 
