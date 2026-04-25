@@ -59,6 +59,18 @@ template <typename T> inline dual<T> dual<T>::operator/(const dual<T>& rhs) cons
 	return dual<T>(val / rhs.val, (der * rhs.val - val * rhs.der) / (rhs.val * rhs.val));
 }
 
+template <typename T> inline auto get_value(const T& x)
+{
+	if constexpr(requires {x.val; x.der;})
+	{
+		return x.val;
+	} 
+	else 
+	{
+		return x;
+	}
+}
+
 template <typename T> inline dual<T> sin(const dual<T>& x)
 {
 	using std::sin; using std::cos;
@@ -100,15 +112,9 @@ template <typename T> inline dual<T> atan(const dual<T>& x)
 
 template <typename T> inline dual<T> atan2(const dual<T>& y, const dual<T>& x)
 {
-	// 実部の計算
 	using std::atan2;
 	T val = atan2(y.val, x.val);
-	
-	// 分母 (x^2 + y^2) の計算
 	T denom = x.val * x.val + y.val * y.val;
-	
-	// 微分成分（双対部）の計算
-	// 連鎖律: (dy * x - dx * y) / (x^2 + y^2)
 	T der = (y.der * x.val - x.der * y.val) / denom;
 	
 	return dual<T>(val, der);
@@ -185,6 +191,596 @@ template <typename T> inline dual<T> pow(const T& base, const dual<T>& exp)
 {
 	// scalar^dual
 	return pow(dual<T>(base, T(0.0)), exp);
+}
+
+template <typename T> inline dual<T> expm1(const dual<T>& x)
+{
+	using std::exp; using std::expm1;
+	return dual<T>(expm1(x.val), exp(x.val) * x.der);
+}
+
+template <typename T> inline dual<T> log1p(const dual<T>& x)
+{
+	using std::log1p;
+	return dual<T>(log1p(x.val), x.der / (T(1.0) + x.val));
+}
+
+template <typename T> inline dual<T> log10(const dual<T>& x)
+{
+	using std::log10; using std::log;
+	return dual<T>(log10(x.val), x.der / (x.val * log(T(10.0))));
+}
+
+template <typename T> inline dual<T> log2(const dual<T>& x)
+{
+	using std::log2; using std::log;
+	return dual<T>(log2(x.val), x.der / (x.val * log(T(2.0))));
+}
+
+template <typename T> inline dual<T> hypot(const dual<T>& x, const dual<T>& y)
+{
+	using std::hypot;
+	T res_val = hypot(x.val, y.val);
+	return dual<T>(res_val, (x.val * x.der + y.val * y.der) / res_val);
+}
+
+static const double digamma_P[] = {
+	0.25479851061131551,
+	-0.32555031186804491,
+	-0.65031853770896507,
+	-0.28919126444774784,
+	-0.045251321448739056,
+	-0.0020713321167745952
+};
+
+static const double digamma_Q[] = {
+	1.0,
+	2.0767117023730469,
+	1.4606242909763515,
+	0.43593529692665969,
+	0.054151797245674225,
+	0.0021284987017821144,
+	-0.55789841321675513e-6
+};
+
+static const double digamma_asym_P[] = {
+	0.083333333333333333,
+	-0.0083333333333333333,
+	0.0039682539682539683,
+	-0.0041666666666666667,
+	0.0075757575757575758,
+	-0.021092796092796093,
+	0.083333333333333333,
+	-0.443259803921568627
+};
+
+template <typename T> inline T evaluate_poly(const double* coeffs, T z, int count)
+{
+	T sum = T(coeffs[count - 1]);
+
+	for (int i = count - 2; i >= 0; --i)
+	{
+		sum = sum * z + T(coeffs[i]);
+	}
+
+	return sum;
+}
+
+template <typename T> inline T digamma(T x)
+{
+	using std::log; using std::tan; using std::floor;
+	const double pi = std::numbers::pi;
+	double vx = get_value(x);
+
+	T result = T(0.0);
+
+	if (vx <= -1.0)
+	{
+		T target = T(1.0) - x;
+		T remainder = target - floor(get_value(target));
+
+		if (get_value(remainder) > 0.5)
+		{
+			remainder -= T(1.0);
+		}
+		
+		if (get_value(remainder) == 0.0)
+		{
+			return T(std::numeric_limits<double>::quiet_NaN());
+		}
+		
+		return T(pi) / tan(T(pi) * remainder) + digamma(target);
+	}
+	
+	if (vx == 0.0)
+	{
+		return T(std::numeric_limits<double>::quiet_NaN());
+	}
+
+	if (vx >= 10.0)
+	{
+		asymptotic:
+		
+		T x_minus_1 = x - T(1.0);
+		T inv_x = T(1.0) / x_minus_1;
+		T z = inv_x * inv_x;
+		return result + log(x_minus_1) + T(0.5) * inv_x - z * evaluate_poly(digamma_asym_P, z, 8);
+	}
+
+	while (get_value(x) > 2.0)
+	{
+		if (get_value(x) >= 10.0)
+		{
+			goto asymptotic;
+		}
+
+		x -= T(1.0);
+		result += T(1.0) / x;
+	}
+
+	while (get_value(x) < 1.0)
+	{
+		result -= T(1.0) / x;
+		x += T(1.0);
+	}
+
+	static const float Y = 0.99558162689208984F;
+	static const double root1 = 1569415565.0 / 1073741824.0;
+	static const double root2 = (381566830.0 / 1073741824.0) / 1073741824.0;
+	static const double root3 = 0.90163120932586959186e-19;
+
+	T g = (x - T(root1)) - T(root2) - T(root3);
+	T r = evaluate_poly(digamma_P, T(x - T(1.0)), 6) / evaluate_poly(digamma_Q, T(x - T(1.0)), 7);
+	
+	return result + g * T(Y) + g * r;
+}
+
+template <typename T> inline dual<T> tgamma(const dual<T>& x)
+{
+	using std::tgamma;
+	T val = tgamma(x.val);
+	return dual<T>(val, val * digamma(T(x.val)) * x.der);
+}
+
+template <typename T> inline dual<T> lgamma(const dual<T>& x)
+{
+	using std::lgamma;
+	return dual<T>(lgamma(x.val), digamma(T(x.val)) * x.der);
+}
+
+template <typename T> inline dual<T> riemann_zeta(const dual<T>& s)
+{
+	using std::riemann_zeta; using std::log; using std::pow; using std::abs;
+	T vs = s.val;
+	T val = T(riemann_zeta(get_value(vs)));
+	
+	T eta_der = T(0.0);
+	for(int n = 2; n < 1000; ++n)
+	{
+		T term = (n % 2 == 0 ? 1.0 : -1.0) * log(T(double(n))) / pow(T(double(n)), vs);
+		eta_der += term;
+
+		if (abs(get_value(term)) < 1e-18)
+		{
+			break;
+		}
+	}
+
+	T f = T(1.0) - pow(T(2.0), T(1.0) - vs);
+	T f_der = pow(T(2.0), T(1.0) - vs) * log(T(2.0));
+	
+	T der;
+
+	if (abs(get_value(vs) - 1.0) < 1e-4)
+	{
+		der = T(-1.0) / ((vs - T(1.0)) * (vs - T(1.0)));
+	}
+	else
+	{
+		der = (eta_der - f_der * val) / f;
+	}
+
+	return dual<T>(val, der * s.der);
+}
+
+template <typename T> inline dual<T> beta(const dual<T>& a, const dual<T>& b)
+{
+	using std::beta;
+
+	T val = beta(a.val, b.val);
+	T psi_ab = digamma(a.val + b.val);
+
+	return dual<T>(val, val * (digamma(a.val) - psi_ab) * a.der + val * (digamma(b.val) - psi_ab) * b.der);
+}
+
+template <typename T> inline dual<T> legendre(unsigned n, const dual<T>& x)
+{
+	using std::legendre;
+
+	T val = legendre(n, x.val);
+	
+	if (n == 0)
+	{
+		return dual<T>(val, T(0.0));
+	}
+
+	T der = T(double(n)) / (x.val * x.val - T(1.0)) * (x.val * val - legendre(n - 1, x.val));
+
+	return dual<T>(val, der * x.der);
+}
+
+template <typename T> inline dual<T> assoc_legendre(unsigned n, unsigned m, const dual<T>& x)
+{
+	using std::assoc_legendre;
+
+	T val = assoc_legendre(n, m, x.val);
+	T der = (T(double(n)) * x.val * val - T(double(n + m)) * assoc_legendre(n - 1, m, x.val)) / (x.val * x.val - T(1.0));
+	
+	return dual<T>(val, der * x.der);
+}
+
+template <typename T> inline dual<T> laguerre(unsigned n, const dual<T>& x)
+{
+	using std::laguerre;
+
+	T val = laguerre(n, x.val);
+
+	if (n == 0)
+	{
+		return dual<T>(val, T(0.0));
+	}
+
+	T der = (T(double(n)) * val - T(double(n)) * laguerre(n - 1, x.val)) / x.val;
+
+	return dual<T>(val, der * x.der);
+}
+
+template <typename T> inline dual<T> assoc_laguerre(unsigned n, unsigned m, const dual<T>& x)
+{
+	using std::assoc_laguerre;
+
+	T val = assoc_laguerre(n, m, x.val);
+	T der = (n == 0) ? T(0.0) : -assoc_laguerre(n - 1, m + 1, x.val);
+
+	return dual<T>(val, der * x.der);
+}
+
+template <typename T> inline dual<T> hermite(unsigned n, const dual<T>& x)
+{
+	using std::hermite;
+
+	T val = hermite(n, x.val);
+	T der = (n == 0) ? T(0.0) : T(2.0 * n) * hermite(n - 1, x.val);
+
+	return dual<T>(val, der * x.der);
+}
+
+template <typename T> struct bessel_der_pair
+{
+	T d1;
+	T d2;
+};
+
+template <typename T> inline bessel_der_pair<T> bessel_nu_der_full(T nu, T x, int type)
+{
+	using std::log; using std::pow; using std::tgamma; using std::abs;
+
+	T x2 = x * 0.5;
+	T l_x2 = log(x2);
+	T sum1 = 0, sum2 = 0;
+	
+	for (int k = 0; k < 65; ++k)
+	{
+		T arg = nu + T(double(k + 1));
+		double v_arg = get_value(arg);
+		T term, g1, g2;
+
+		if (v_arg <= 0 && std::abs(v_arg - std::round(v_arg)) < 1e-12)
+		{
+			int m = (int)std::abs(std::round(v_arg));
+
+			T factor = pow(x2, nu + T(double(2 * k))) * (T(double((k % 2 == 0 || type == 1) ? 1 : -1)) / T(double(tgamma(k + 1))));
+			T d1_gamma = T(double((m % 2 == 0) ? 1 : -1) * std::tgamma(m + 1));
+			T d2_gamma = -2.0 * d1_gamma * digamma(T(double(m + 1)));
+			g1 = d1_gamma; 
+			g2 = 2.0 * d1_gamma * l_x2 + d2_gamma; 
+			term = factor; 
+		}
+		else
+		{
+			T gamma_val = T(tgamma(v_arg));
+			T common = pow(x2, nu + T(double(2 * k))) * (T(double((k % 2 == 0 || type == 1) ? 1 : -1)) / (T(double(tgamma(k + 1))) * gamma_val));
+			T psi0 = digamma(arg);
+			T psi1 = 0;
+
+			for(int m=0; m<40; ++m)
+			{
+				psi1 += 1.0 / ((arg + T(double(m))) * (arg + T(double(m))));
+			}
+
+			g1 = l_x2 - psi0;
+			g2 = g1 * g1 - psi1;
+			term = common;
+		}
+
+		sum1 += term * g1;
+		sum2 += term * g2;
+
+		if (k > 10 && abs(get_value(term * g1)) < 1e-20)
+		{
+			break;
+		}
+	}
+
+	return {sum1, sum2};
+}
+
+template <typename T> inline dual<T> cyl_bessel_j(const dual<T>& nu, const dual<T>& x)
+{
+	using std::cyl_bessel_j; using std::cyl_neumann;
+
+	T v_nu = nu.val;
+	T v_x = x.val;
+
+	double dv = get_value(v_nu); double dx_v = get_value(v_x);
+
+	T val = T(cyl_bessel_j(dv, dx_v));
+	T dx = (v_nu / v_x) * val - T(cyl_bessel_j(dv + 1.0, dx_v));
+
+	T dnu;
+	if (dx_v > 30.0)
+	{
+		dnu = (std::numbers::pi * 0.5) * T(cyl_neumann(dv, dx_v));
+	}
+	else 
+	{
+		dnu = bessel_nu_der_full(v_nu, v_x, -1).d1;
+	}
+
+	return dual<T>(val, dnu * nu.der + dx * x.der);
+}
+
+template <typename T> inline dual<T> cyl_bessel_i(const dual<T>& nu, const dual<T>& x)
+{
+	using std::cyl_bessel_i;
+
+	T v_nu = nu.val;
+	T v_x = x.val;
+
+	double dv = get_value(v_nu); double dx_v = get_value(v_x);
+
+	T val = T(cyl_bessel_i(dv, dx_v));
+	T dx = (v_nu / v_x) * val + T(cyl_bessel_i(dv + 1.0, dx_v));
+
+	T dnu = bessel_nu_der_full(v_nu, v_x, 1).d1;
+
+	return dual<T>(val, dnu * nu.der + dx * x.der);
+}
+
+template <typename T> inline dual<T> cyl_neumann(const dual<T>& nu, const dual<T>& x)
+{
+	using std::cyl_neumann; using std::cyl_bessel_j; using std::sin; using std::cos; using std::tan;
+
+	T v_nu = nu.val; T v_x = x.val;
+	double dv = get_value(v_nu); double dx_v = get_value(v_x);
+	T val = T(cyl_neumann(dv, dx_v));
+	T dx = (v_nu / v_x) * val - T(cyl_neumann(dv + 1.0, dx_v));
+
+	T dnu;
+	const double pi = std::numbers::pi;
+
+	if (dx_v > 30.0)
+	{
+		dnu = -(pi * 0.5) * T(cyl_bessel_j(dv, dx_v));
+	}
+	else if (std::abs(dv - std::round(dv)) < 1e-10)
+	{
+		int n = (int)std::round(dv);
+		auto res = bessel_nu_der_full(v_nu, v_x, -1);
+		auto res_m = bessel_nu_der_full(-v_nu, v_x, -1);
+		dnu = T(1.0 / (2.0 * pi)) * (res.d2 - T(double((n % 2 == 0) ? 1 : -1)) * res_m.d2) - T(pi * 0.5) * T(cyl_bessel_j(dv, dx_v));
+	}
+	else
+	{
+		auto res = bessel_nu_der_full(v_nu, v_x, -1);
+		auto res_m = bessel_nu_der_full(-v_nu, v_x, -1);
+		dnu = (res.d1 * cos(v_nu * T(pi)) - pi * T(cyl_bessel_j(dv, dx_v)) * sin(v_nu * T(pi)) + res_m.d1) / sin(v_nu * T(pi)) - T(pi) * val / tan(v_nu * T(pi));
+	}
+
+	return dual<T>(val, dnu * nu.der + dx * x.der);
+}
+
+template <typename T> inline dual<T> cyl_bessel_k(const dual<T>& nu, const dual<T>& x)
+{
+	using std::cyl_bessel_k; using std::sin; using std::tan;
+
+	T v_nu = nu.val; T v_x = x.val;
+	double dv = get_value(v_nu); double dx_v = get_value(v_x);
+	T val = T(cyl_bessel_k(dv, dx_v));
+	T dx = (v_nu / v_x) * val - T(cyl_bessel_k(dv + 1.0, dx_v));
+
+	T dnu;
+	const double pi = std::numbers::pi;
+
+	if (dx_v > 25.0)
+	{
+		dnu = val * (v_nu / v_x);
+	}
+	else if (std::abs(dv - std::round(dv)) < 1e-10)
+	{
+		int n = (int)std::round(dv);
+		auto res = bessel_nu_der_full(v_nu, v_x, 1);
+		auto res_m = bessel_nu_der_full(-v_nu, v_x, 1);
+		dnu = T(double((n % 2 == 0) ? 1 : -1) * 0.25) * (res_m.d2 - res.d2);
+	}
+	else
+	{
+		auto res = bessel_nu_der_full(v_nu, v_x, 1);
+		auto res_m = bessel_nu_der_full(-v_nu, v_x, 1);
+		dnu = T(pi * 0.5) * (-res_m.d1 - res.d1) / sin(v_nu * T(pi)) - T(pi) * val / tan(v_nu * T(pi));
+	}
+
+	return dual<T>(val, dnu * nu.der + dx * x.der);
+}
+
+template <typename T> inline dual<T> sph_bessel(unsigned n, const dual<T>& x)
+{
+	using std::sph_bessel;
+
+	T val = sph_bessel(n, x.val);
+	T der = (n == 0) ? -sph_bessel(1, x.val) : sph_bessel(n - 1, x.val) - T(double(n + 1)) / x.val * val;
+	return dual<T>(val, der * x.der);
+}
+
+template <typename T> inline dual<T> sph_neumann(unsigned n, const dual<T>& x)
+{
+	using std::sph_neumann;
+
+	T val = sph_neumann(n, x.val);
+	T der = (n == 0) ? -sph_neumann(1, x.val) : sph_neumann(n - 1, x.val) - T(double(n + 1)) / x.val * val;
+	
+	return dual<T>(val, der * x.der);
+}
+
+template <typename T> inline dual<T> sph_legendre(unsigned l, unsigned m, const dual<T>& theta)
+{
+	using std::sph_legendre; using std::sin; using std::cos; using std::sqrt;
+	
+	T v_t = theta.val;
+	T val = T(sph_legendre(l, m, get_value(v_t)));
+	
+	if (l == 0)
+	{
+		return dual<T>(val, T(0.0));
+	}
+
+	if (m > l) 
+	{
+		return dual<T>(T(0.0), T(0.0));
+	}
+
+	T der;
+	double vt_val = get_value(v_t);
+	double sin_t = std::sin(vt_val);
+
+	if (std::abs(sin_t) < 1e-10)
+	{
+		if (m == 1)
+		{
+			der = T(0.5) * sqrt(T(double(l * (l + 1))));
+			if (vt_val > 1.0) der = -der;
+		}
+		else
+		{
+			der = T(0.0);
+		}
+	}
+	else
+	{
+		T y_prev = (l > m) ? T(sph_legendre(l - 1, m, vt_val)) : T(0.0);
+		T coeff = sqrt(T(double(2 * l + 1)) / T(double(2 * l - 1)) * T(double(l * l - m * m)));
+
+		der = (T(double(l)) * cos(v_t) * val - coeff * y_prev) / sin(v_t);
+	}
+	
+	return dual<T>(val, der * theta.der);
+}
+
+template <typename T> inline dual<T> ellint_1(const dual<T>& k, const dual<T>& phi)
+{
+	using std::ellint_1; using std::ellint_2; using std::sin; using std::cos; using std::sqrt;
+
+	T vk = k.val; T vp = phi.val;
+	T val = ellint_1(vk, vp);
+	T k2 = vk * vk; T sn = sin(vp); T cn = cos(vp);
+	T delta = sqrt(T(1.0) - k2 * sn * sn);
+	T d_dk = (ellint_2(vk, vp) - (T(1.0) - k2) * val) / (vk * (T(1.0) - k2)) - (vk * sn * cn) / ((T(1.0) - k2) * delta);
+	
+	return dual<T>(val, d_dk * k.der + (T(1.0) / delta) * phi.der);
+}
+
+template <typename T> inline dual<T> comp_ellint_1(const dual<T>& k)
+{
+	using std::comp_ellint_1; using std::comp_ellint_2;
+
+	T vk = k.val; T val = comp_ellint_1(vk);
+	
+	return dual<T>(val, (comp_ellint_2(vk) / (vk * (T(1.0) - vk * vk)) - val / vk) * k.der);
+}
+
+template <typename T> inline dual<T> ellint_2(const dual<T>& k, const dual<T>& phi)
+{
+	using std::ellint_1; using std::ellint_2; using std::sin; using std::sqrt;
+
+	T vk = k.val; T vp = phi.val;
+	T val = ellint_2(vk, vp);
+	T delta = sqrt(T(1.0) - vk * vk * sin(vp) * sin(vp));
+	
+	return dual<T>(val, ((val - ellint_1(vk, vp)) / vk) * k.der + delta * phi.der);
+}
+
+template <typename T> inline dual<T> comp_ellint_2(const dual<T>& k)
+{
+	using std::comp_ellint_1; using std::comp_ellint_2;
+
+	T vk = k.val;
+	
+	return dual<T>(comp_ellint_2(vk), ((comp_ellint_2(vk) - comp_ellint_1(vk)) / vk) * k.der);
+}
+
+template <typename T> inline dual<T> ellint_3(const dual<T>& nu, const dual<T>& k, const dual<T>& phi)
+{
+    using std::ellint_1; using std::ellint_2; using std::ellint_3;
+    using std::sin; using std::cos; using std::sqrt;
+
+    T v_n = nu.val; T v_k = k.val; T v_p = phi.val;
+    // C++17/20 標準ライブラリの引数順序: (k, n, phi)
+    T val = ellint_3(v_k, v_n, v_p); 
+
+    T sn = sin(v_p); T cn = cos(v_p);
+    T k2 = v_k * v_k; T n2 = v_n * v_n;
+    T delta = sqrt(T(1.0) - k2 * sn * sn);
+
+    // 1. φに関する微分 (dPi/dphi)
+    T d_dp = T(1.0) / ((T(1.0) - v_n * sn * sn) * delta);
+    
+    // 2. kに関する微分 (dPi/dk)
+    // 解析解: (k/(k^2-n)) * [ E/(1-k^2) - Pi - (k^2*sn*cn)/((1-k^2)*delta) ]
+    // これにより complete 版との整合性と境界項の寄与を両立させる
+    T d_dk = (v_k / (k2 - v_n)) * (
+        ellint_2(v_k, v_p) / (T(1.0) - k2) - val - (k2 * sn * cn) / ((T(1.0) - k2) * delta)
+    );
+    
+    // 3. nに関する微分 (dPi/dn)
+    // 解析解: (1/(2(n-1)(k^2-n))) * [ E + (k^2-n)/n*F + (n^2-k^2)/n*Pi - (n*sn*cn*delta)/(1-n*sn^2) ]
+    T d_dn = (T(1.0) / (T(2.0) * (v_n - T(1.0)) * (k2 - v_n))) * (
+        ellint_2(v_k, v_p) + 
+        ((k2 - v_n) / v_n) * ellint_1(v_k, v_p) + 
+        ((n2 - k2) / v_n) * val - 
+        (v_n * sn * cn * delta) / (T(1.0) - v_n * sn * sn)
+    );
+
+    return dual<T>(val, d_dn * nu.der + d_dk * k.der + d_dp * phi.der);
+}
+
+template <typename T> inline dual<T> comp_ellint_3(const dual<T>& nu, const dual<T>& k)
+{
+	using std::comp_ellint_1; using std::comp_ellint_2; using std::comp_ellint_3;
+
+	T v_n = nu.val; T v_k = k.val;
+	T val = comp_ellint_3(v_k, v_n);
+	T k2 = v_k * v_k;
+
+	T d_dk = (v_k / (k2 - v_n)) * (comp_ellint_2(v_k) / (T(1.0) - k2) - val);
+	T d_dn = (T(1.0) / (T(2.0) * (v_n - T(1.0)) * (k2 - v_n))) * (comp_ellint_2(v_k) + ((k2 - v_n) / v_n) * comp_ellint_1(v_k) + ((v_n * v_n - k2) / v_n) * val);
+
+	return dual<T>(val, d_dn * nu.der + d_dk * k.der);
+}
+
+template <typename T> inline dual<T> expint(const dual<T>& x)
+{
+	using std::expint; using std::exp;
+	return dual<T>(expint(x.val), exp(x.val) / x.val * x.der);
 }
 
 template <typename T> inline dual<T> erf(const dual<T>& x)
@@ -672,18 +1268,6 @@ template <typename T> inline bool isnan(const complex<T>& c)
 {
 	using std::isnan;
 	return isnan(c.re) || isnan(c.im);
-}
-
-template <typename T> inline auto get_value(const T& x)
-{
-	if constexpr(requires {x.val; x.der;})
-	{
-		return x.val;
-	} 
-	else 
-	{
-		return x;
-	}
 }
 
 template <typename T> inline T sqr(T x)
@@ -1832,7 +2416,7 @@ template <typename T> inline complex<T> faddeeva(complex<T> z, T relerr = T(0.0)
 	using std::isinf;
 
 	const double eps = std::numeric_limits<double>::epsilon();
-	const double pi = 3.1415926535897932384626433832795;
+	const double pi = std::numbers::pi;
 	const T ispi = T(0.56418958354775628694807945156); // 1/sqrt(pi)
 
 	// 純虚数または実数の場合の特殊処理
