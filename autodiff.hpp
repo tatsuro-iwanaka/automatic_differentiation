@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cmath>
+#include <complex>
 
 namespace autodiff
 {
@@ -16,6 +17,8 @@ template <typename T> struct dual
 	{
 		;
 	}
+
+	explicit operator T() const;
 
 	dual operator+(const dual&) const;
 	dual operator-(const dual&) const;
@@ -33,6 +36,11 @@ template <typename T> struct dual
 	dual& operator*=(const T&);
 	dual& operator/=(const T&);
 };
+
+template <typename T> inline dual<T>::operator T() const
+{
+	return val;
+}
 
 template <typename T> inline dual<T> dual<T>::operator+(const dual<T>& rhs) const
 {
@@ -730,37 +738,37 @@ template <typename T> inline dual<T> comp_ellint_2(const dual<T>& k)
 
 template <typename T> inline dual<T> ellint_3(const dual<T>& nu, const dual<T>& k, const dual<T>& phi)
 {
-    using std::ellint_1; using std::ellint_2; using std::ellint_3;
-    using std::sin; using std::cos; using std::sqrt;
+	using std::ellint_1; using std::ellint_2; using std::ellint_3;
+	using std::sin; using std::cos; using std::sqrt;
 
-    T v_n = nu.val; T v_k = k.val; T v_p = phi.val;
-    // C++17/20 標準ライブラリの引数順序: (k, n, phi)
-    T val = ellint_3(v_k, v_n, v_p); 
+	T v_n = nu.val; T v_k = k.val; T v_p = phi.val;
+	// C++17/20 標準ライブラリの引数順序: (k, n, phi)
+	T val = ellint_3(v_k, v_n, v_p); 
 
-    T sn = sin(v_p); T cn = cos(v_p);
-    T k2 = v_k * v_k; T n2 = v_n * v_n;
-    T delta = sqrt(T(1.0) - k2 * sn * sn);
+	T sn = sin(v_p); T cn = cos(v_p);
+	T k2 = v_k * v_k; T n2 = v_n * v_n;
+	T delta = sqrt(T(1.0) - k2 * sn * sn);
 
-    // 1. φに関する微分 (dPi/dphi)
-    T d_dp = T(1.0) / ((T(1.0) - v_n * sn * sn) * delta);
-    
-    // 2. kに関する微分 (dPi/dk)
-    // 解析解: (k/(k^2-n)) * [ E/(1-k^2) - Pi - (k^2*sn*cn)/((1-k^2)*delta) ]
-    // これにより complete 版との整合性と境界項の寄与を両立させる
-    T d_dk = (v_k / (k2 - v_n)) * (
-        ellint_2(v_k, v_p) / (T(1.0) - k2) - val - (k2 * sn * cn) / ((T(1.0) - k2) * delta)
-    );
-    
-    // 3. nに関する微分 (dPi/dn)
-    // 解析解: (1/(2(n-1)(k^2-n))) * [ E + (k^2-n)/n*F + (n^2-k^2)/n*Pi - (n*sn*cn*delta)/(1-n*sn^2) ]
-    T d_dn = (T(1.0) / (T(2.0) * (v_n - T(1.0)) * (k2 - v_n))) * (
-        ellint_2(v_k, v_p) + 
-        ((k2 - v_n) / v_n) * ellint_1(v_k, v_p) + 
-        ((n2 - k2) / v_n) * val - 
-        (v_n * sn * cn * delta) / (T(1.0) - v_n * sn * sn)
-    );
+	// 1. φに関する微分 (dPi/dphi)
+	T d_dp = T(1.0) / ((T(1.0) - v_n * sn * sn) * delta);
+	
+	// 2. kに関する微分 (dPi/dk)
+	// 解析解: (k/(k^2-n)) * [ E/(1-k^2) - Pi - (k^2*sn*cn)/((1-k^2)*delta) ]
+	// これにより complete 版との整合性と境界項の寄与を両立させる
+	T d_dk = (v_k / (k2 - v_n)) * (
+		ellint_2(v_k, v_p) / (T(1.0) - k2) - val - (k2 * sn * cn) / ((T(1.0) - k2) * delta)
+	);
+	
+	// 3. nに関する微分 (dPi/dn)
+	// 解析解: (1/(2(n-1)(k^2-n))) * [ E + (k^2-n)/n*F + (n^2-k^2)/n*Pi - (n*sn*cn*delta)/(1-n*sn^2) ]
+	T d_dn = (T(1.0) / (T(2.0) * (v_n - T(1.0)) * (k2 - v_n))) * (
+		ellint_2(v_k, v_p) + 
+		((k2 - v_n) / v_n) * ellint_1(v_k, v_p) + 
+		((n2 - k2) / v_n) * val - 
+		(v_n * sn * cn * delta) / (T(1.0) - v_n * sn * sn)
+	);
 
-    return dual<T>(val, d_dn * nu.der + d_dk * k.der + d_dp * phi.der);
+	return dual<T>(val, d_dn * nu.der + d_dk * k.der + d_dp * phi.der);
 }
 
 template <typename T> inline dual<T> comp_ellint_3(const dual<T>& nu, const dual<T>& k)
@@ -998,8 +1006,16 @@ template <typename T> struct complex
 		;
 	}
 
+	template <typename U> complex(const std::complex<U>& c) : re(T(c.real())), im(T(c.imag()))
+	{
+		;
+	}
+
+	template <typename U> explicit operator std::complex<U>() const;
+
 	T real() const;
 	T imag() const;
+
 	complex operator+(const complex&) const;
 	complex operator-(const complex&) const;
 	complex operator-() const;
@@ -1016,6 +1032,11 @@ template <typename T> struct complex
 	complex& operator*=(const T&);
 	complex& operator/=(const T&);
 };
+
+template <typename T> template <typename U> inline complex<T>::operator std::complex<U>() const
+{
+	return std::complex<U>(static_cast<U>(re), static_cast<U>(im));
+}
 
 template <typename T> inline T complex<T>::real() const
 {
@@ -1297,8 +1318,8 @@ template <typename T> inline T sinc(T x, T sinx)
 
 template <typename T> static T erfcx_y100(T y100)
 {
-    switch(static_cast<int>(get_value(y100)))
-    {
+	switch(static_cast<int>(get_value(y100)))
+	{
 		case 0:
 		{
 			T t = T(2.0) * y100 - T(1.0);
@@ -1799,9 +1820,9 @@ template <typename T> static T erfcx_y100(T y100)
 			T t = T(2.0) * y100 - T(199.0);
 			return T(0.97771701335885035464E0) + (T(0.22000938572830479551E-1) + (T(0.27951610702682383001E-3) + (T(0.25153688325245314530E-5) + (T(0.16514019547822821453E-7) + (T(0.78191526829368231251E-10) + T(0.24873652355555555556E-12) * t) * t) * t) * t) * t) * t;
 		}
-    }
+	}
 
-    return T(1.0);
+	return T(1.0);
 }
 
 template <typename T> static T w_im_y100(T y100, T x)
