@@ -3,13 +3,6 @@
 A header-only C++ library for Forward-Mode Automatic Differentiation (AD). 
 This library provides a dual number (`dual<T>`) implementation and a fully AD-compatible complex number (`complex<T>`) structure.
 
-## Features
-
-* **Header-only**
-* **Forward-Mode AD**: Computes exact derivatives (Jacobians) without the truncation or round-off errors associated with finite difference methods.
-* **First-Class Complex Number Support**: Native implementation of `complex<T>` that flawlessly interacts with `dual<T>`, enabling the differentiation of algorithms in the complex plane.
-* **Comprehensive `<cmath>` Coverage**: Support for trigonometric, hyperbolic, exponential, logarithmic, and error functions (`erf`, `erfc`) using robust Two-Step ADL (Argument-Dependent Lookup).
-
 ## Usage
 
 ### Basic Automatic Differentiation
